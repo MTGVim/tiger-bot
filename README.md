@@ -28,7 +28,6 @@
 | `BOJ_TODAY_TIMEZONE` | 아니오 | `Asia/Seoul` | 오늘의 문제 날짜 기준 타임존 |
 | `ADMIN_USER_IDS` | 아니오 | `""` | `!오늘의 문제 리셋` 실행 가능한 Discord 사용자 ID 목록(쉼표 구분) |
 | `ALLOWED_CHANNEL_ID` | 아니오 | `""` | 봇이 반응할 단일 채널 ID. 빈 값이면 모든 채널 허용. (재시작 알림도 이 채널로 전송) |
-| `BOT_UPDATE_ENABLED` | 아니오 | `false` | `!봇 업데이트` 실행 여부 (`true`/`false`) |
 | `WATCHTOWER_IMAGE` | 아니오 | `containrrr/watchtower:latest` | 업데이트 one-shot 실행 시 사용할 이미지 |
 | `WATCHTOWER_SCOPE` | 아니오 | `tiger-bot` | watchtower one-shot의 scope(`--scope`) |
 | `RPS_STATS_PATH` | 아니오 | `/app/data/rps-stats.json` | 가위바위보 전적 저장 파일 경로 |
@@ -70,7 +69,7 @@ docker compose up -d
 ## 봇 업데이트
 
 이 저장소는 이미지를 갱신하는 Watchtower 방식으로 운영한다.
-`!봇 업데이트`는 ADMIN_USER_IDS에 등록된 사용자만 수행할 수 있으며, `BOT_UPDATE_ENABLED=true`일 때만 동작한다.
+`!봇 업데이트`는 ADMIN_USER_IDS에 등록된 사용자만 수행할 수 있다.
 
 GitHub Actions에서 `ghcr.io/mtgvim/tiger-bot:latest`로 최신 이미지가 push되면
 라벨 `com.centurylinklabs.watchtower.enable=true`가 있는 컨테이너만 자동 갱신된다.

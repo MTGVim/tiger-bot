@@ -6,7 +6,6 @@ services:
       DISCORD_BOT_TOKEN: "여기에_봇_토큰"
       ADMIN_USER_IDS: "여기에_디스코드_관리자_ID(쉼표로_복수_지정)"
       ALLOWED_CHANNEL_ID: "여기에_허용채널_ID(단일)"
-      BOT_UPDATE_ENABLED: "false"
       WATCHTOWER_IMAGE: "containrrr/watchtower:latest"
       WATCHTOWER_SCOPE: "tiger-bot"
       BOJ_SEARCH_API_URL: "https://solved.ac/api/v3/search/problem"
