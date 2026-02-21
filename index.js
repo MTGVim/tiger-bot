@@ -34,6 +34,7 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const DEFAULT_TODAY_DIFFICULTY = "EASY";
 
 function normalizeChannelId(input) {
   const raw = String(input || "").trim();
@@ -806,7 +807,7 @@ client.on("messageCreate", async (msg) => {
   const randomQuestionMatch = content.match(/^!(?:랜덤문제|랜덤\s+문제)(?:\s+(.+))?$/);
   if (randomQuestionMatch) {
     const difficultyArg = String(randomQuestionMatch[1] || "").trim();
-    const difficulty = normalizeLeetDifficulty(difficultyArg);
+  const difficulty = difficultyArg ? normalizeLeetDifficulty(difficultyArg) : DEFAULT_TODAY_DIFFICULTY;
     if (!difficulty) {
       return msg.reply("⚠️ 사용법: `!랜덤 문제 [쉬움|중간|어려움]`");
     }
@@ -855,9 +856,9 @@ client.on("messageCreate", async (msg) => {
       }
     }
 
-    const difficulty = normalizeLeetDifficulty(rawArg);
+    const difficulty = rawArg ? normalizeLeetDifficulty(rawArg) : DEFAULT_TODAY_DIFFICULTY;
     if (!difficulty) {
-      return msg.reply("⚠️ 사용법: `!오늘의 문제`, `!오늘의 문제 (중간)`, `!오늘의 문제 리셋`");
+      return msg.reply("⚠️ 사용법: `!오늘의 문제`, `!오늘의 문제 (쉬움|중간|어려움)`, `!오늘의 문제 리셋`");
     }
 
     const timezone = resolveLeetTodayTimeZone();
