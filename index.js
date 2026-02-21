@@ -617,13 +617,6 @@ client.on("messageCreate", async (msg) => {
 
   const content = msg.content.trim();
 
-  console.log(
-    "[command] received message:",
-    content,
-    "| from:",
-    `${msg.author.username}#${msg.author.discriminator}`
-  );
-
   if (content === "!도움") {
     msg.reply(getAvailableCommandsMessage());
     return;
