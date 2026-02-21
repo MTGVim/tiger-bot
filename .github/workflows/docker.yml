@@ -24,11 +24,14 @@ jobs:
       - name: Set lowercase owner and repo
         run: |
           REPO_PATH="${GITHUB_REPOSITORY:-${{ github.repository }}}"
-          OWNER_LC="${GITHUB_REPOSITORY_OWNER:-$(echo "$REPO_PATH" | cut -d'/' -f1)}"
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER:-${{ github.repository_owner }}}"
+          OWNER_LC="${OWNER_LC:-$(echo "$REPO_PATH" | cut -d'/' -f1)}"
           REPO_LC="${{ github.event.repository.name }}"
           if [ -z "${REPO_LC}" ] || [ "${REPO_LC}" = "null" ]; then
             REPO_LC="$(echo "$REPO_PATH" | cut -d'/' -f2)"
           fi
+          OWNER_LC="${OWNER_LC:-mtgvim}"
+          REPO_LC="${REPO_LC:-tiger-bot}"
           echo "OWNER_LC=${OWNER_LC,,}" >> "$GITHUB_ENV"
           echo "REPO_LC=${REPO_LC,,}" >> "$GITHUB_ENV"
         shell: bash
