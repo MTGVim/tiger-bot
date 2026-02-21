@@ -36,12 +36,29 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-const ALLOWED_CHANNEL_ID = String(
-  process.env.ALLOWED_CHANNEL_ID || ""
-)
-  .trim()
-  .split(",")[0]
-  .trim();
+function resolveAllowedChannelId() {
+  const primary = String(process.env.ALLOWED_CHANNEL_ID || "").trim();
+  if (primary) {
+    return primary.split(",")[0].trim();
+  }
+
+  const legacy = String(process.env.ALLOWED_CHANNEL_IDS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)[0];
+  if (legacy) {
+    console.log(
+      "[config] ALLOWED_CHANNEL_ID 미설정. ALLOWED_CHANNEL_IDS에서 첫 번째 값을 허용 채널로 사용합니다."
+    );
+    return legacy;
+  }
+
+  console.log("[config] 허용 채널 미설정: 모든 채널 허용 모드");
+  return "";
+}
+
+const ALLOWED_CHANNEL_ID = resolveAllowedChannelId();
+console.log(`[config] allowed channel filter: ${ALLOWED_CHANNEL_ID || "(all)"}`);
 
 let leetTodayLoaded = false;
 let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
