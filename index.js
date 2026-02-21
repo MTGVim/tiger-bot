@@ -33,6 +33,12 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const ALLOWED_CHANNEL_IDS = new Set(
+  (process.env.ALLOWED_CHANNEL_IDS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 
 let leetTodayLoaded = false;
 let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
@@ -495,6 +501,7 @@ client.on("clientReady", async () => {
 
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
+  if (ALLOWED_CHANNEL_IDS.size > 0 && !ALLOWED_CHANNEL_IDS.has(msg.channelId)) return;
 
   const content = msg.content.trim();
 

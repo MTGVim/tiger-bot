@@ -5,6 +5,7 @@ services:
     environment:
       DISCORD_BOT_TOKEN: "여기에_봇_토큰"
       ADMIN_USER_IDS: "여기에_디스코드_관리자_ID(쉼표로_복수_지정)"
+      ALLOWED_CHANNEL_IDS: "여기에_허용채널_ID(쉼표로_복수_지정)"
       BOJ_SEARCH_API_URL: "https://solved.ac/api/v3/search/problem"
       BOJ_FETCH_TIMEOUT_MS: "5000"
       BOJ_TODAY_CACHE_PATH: "/app/data/boj-today.json"
