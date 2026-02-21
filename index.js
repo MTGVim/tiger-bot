@@ -601,7 +601,7 @@ function getAvailableCommandsMessage() {
     { command: "!가위바위보 <가위|바위|보>", description: "가위바위보 게임" },
     { command: "!가위바위보 전적", description: "나의 전적 조회" },
     { command: "!가위바위보 랭킹 [N]", description: "전적 랭킹 조회" },
-    { command: "!봇 업데이트", description: "watchtower 1회 실행으로 업데이트" },
+    { command: "!봇 업데이트", description: "봇 최신 버전 업데이트" },
   ];
 
   return formatAvailableCommands(commands);
