@@ -23,8 +23,14 @@ jobs:
 
       - name: Set lowercase owner and repo
         run: |
-          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
-          echo "REPO_LC=${GITHUB_REPOSITORY_NAME,,}" >> "$GITHUB_ENV"
+          REPO_PATH="${GITHUB_REPOSITORY:-${{ github.repository }}}"
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER:-$(echo "$REPO_PATH" | cut -d'/' -f1)}"
+          REPO_LC="${{ github.event.repository.name }}"
+          if [ -z "${REPO_LC}" ] || [ "${REPO_LC}" = "null" ]; then
+            REPO_LC="$(echo "$REPO_PATH" | cut -d'/' -f2)"
+          fi
+          echo "OWNER_LC=${OWNER_LC,,}" >> "$GITHUB_ENV"
+          echo "REPO_LC=${REPO_LC,,}" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Build commit summary
