@@ -14,3 +14,4 @@ services:
       - ./data:/app/data
     labels:
       - com.centurylinklabs.watchtower.enable=true
+      - com.centurylinklabs.watchtower.scope=tiger-bot
