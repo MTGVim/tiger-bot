@@ -40,18 +40,21 @@ docker compose up -d
 
 ## 봇 업데이트
 
-운영에서 즉시 반영하려면 아래 순서로 실행한다.
+이 저장소는 이미지를 갱신하는 Watchtower 방식으로 운영한다.
 
-```bash
-git pull
-docker compose pull
-docker compose up -d --build
-```
+GitHub Actions에서 `BOT_IMAGE`에 지정한 태그(기본: `ghcr.io/mtgvim/tiger-bot:latest`)로 최신 이미지가 push되면
+라벨 `com.centurylinklabs.watchtower.enable=true`가 있는 컨테이너만 자동 갱신된다.
 
-한 번에 실행하고 싶으면 스크립트를 사용할 수 있다.
+수동으로 1회 갱신하려면:
 
 ```bash
 bash bot-update.sh
+```
+
+원하면 환경변수로 특정 Watchtower 이미지를 강제로 사용할 수 있다.
+
+```bash
+WATCHTOWER_IMAGE=containrrr/watchtower:latest bash bot-update.sh
 ```
 
 ## 명령어

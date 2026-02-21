@@ -1,6 +1,6 @@
 services:
   tiger-bot:
-    build: .
+    image: ${BOT_IMAGE:-ghcr.io/mtgvim/tiger-bot:latest}
     restart: unless-stopped
     environment:
       DISCORD_BOT_TOKEN: "여기에_봇_토큰"
@@ -12,3 +12,5 @@ services:
       RPS_STATS_PATH: "/app/data/rps-stats.json"
     volumes:
       - ./data:/app/data
+    labels:
+      - com.centurylinklabs.watchtower.enable=true

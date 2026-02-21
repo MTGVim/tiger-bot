@@ -5,13 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "== Pull latest code =="
-git pull --ff-only
+WATCHTOWER_IMAGE="${WATCHTOWER_IMAGE:-containrrr/watchtower:latest}"
 
-echo "== Update images =="
-docker compose pull
-
-echo "== Recreate containers =="
-docker compose up -d --build --remove-orphans
+echo "== Trigger watchtower one-time update =="
+docker run --rm \
+  --name tiger-bot-watchtower-once \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  "$WATCHTOWER_IMAGE" \
+  --run-once \
+  --label-enable \
+  --cleanup
 
 echo "== Done =="
