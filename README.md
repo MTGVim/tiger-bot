@@ -42,9 +42,9 @@ docker compose up -d
 
 이 저장소는 이미지를 갱신하는 Watchtower 방식으로 운영한다.
 
-GitHub Actions에서 `BOT_IMAGE`에 지정한 태그(기본: `ghcr.io/mtgvim/tiger-bot:latest`)로 최신 이미지가 push되면
+GitHub Actions에서 `ghcr.io/mtgvim/tiger-bot:latest`로 최신 이미지가 push되면
 라벨 `com.centurylinklabs.watchtower.enable=true`가 있는 컨테이너만 자동 갱신된다.
-(`.github/workflows/docker.yml` 기준 `master/main` 브랜치 푸시 시 `ghcr.io/<owner>/<repo>:latest` 태그로 push)
+(`.github/workflows/docker.yml` 기준 `master/main` 브랜치 푸시 시 `ghcr.io/mtgvim/tiger-bot:latest` 태그로 push)
 `com.centurylinklabs.watchtower.scope=tiger-bot` 라벨로 갱신 대상 스택을 고정한다.
 
 수동으로 1회 갱신하려면 아래 명령을 실행한다.

@@ -1,6 +1,6 @@
 services:
   tiger-bot:
-    image: ${BOT_IMAGE:-ghcr.io/mtgvim/tiger-bot:latest}
+    image: ghcr.io/mtgvim/tiger-bot:latest
     restart: unless-stopped
     environment:
       DISCORD_BOT_TOKEN: "여기에_봇_토큰"
