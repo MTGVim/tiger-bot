@@ -684,6 +684,8 @@ client.on("messageCreate", async (msg) => {
   }
 
   if (content === "!봇 업데이트" || content === "!봇업데이트") {
+    console.log("[command] !봇 업데이트 requested.");
+
     if (updateInProgress) {
       return msg.reply("⏳ 이미 업데이트 작업이 진행 중입니다.");
     }
@@ -700,12 +702,14 @@ client.on("messageCreate", async (msg) => {
       const runOnceCommand = getWatchtowerRunOnceCommand();
       await dockerWithTimeout(runOnceCommand);
       await msg.channel.send(
-        `업데이트 확인이 완료되었습니다.\n- scope: ${WATCHTOWER_SCOPE}\n- 명령어: \`${runOnceCommand}\``
+        `업데이트 확인이 완료되었습니다.\n\n${getAvailableCommandsMessage()}`
       );
     } catch (err) {
       console.log("[command] !봇 업데이트 failed:", err.message);
       await msg.channel.send(
-        `⚠️ 봇 업데이트 실행에 실패했습니다. ${err.message} (Docker 접근 권한, WATCHTOWER_IMAGE, 라벨 설정을 확인해주세요.)`
+        `⚠️ 봇 업데이트 실행에 실패했습니다. ${err.message}\n` +
+        "(Docker 접근 권한, WATCHTOWER_IMAGE, 라벨 설정을 확인해주세요.)\n\n" +
+        getAvailableCommandsMessage()
       );
     } finally {
       updateInProgress = false;
