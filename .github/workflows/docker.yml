@@ -13,6 +13,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_REPO: ghcr.io/mtgvim/tiger-bot
 
     steps:
       - name: Checkout
@@ -20,21 +22,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Set lowercase owner and repo
-        run: |
-          REPO_PATH="${GITHUB_REPOSITORY:-${{ github.repository }}}"
-          OWNER_LC="${GITHUB_REPOSITORY_OWNER:-${{ github.repository_owner }}}"
-          OWNER_LC="${OWNER_LC:-$(echo "$REPO_PATH" | cut -d'/' -f1)}"
-          REPO_LC="${{ github.event.repository.name }}"
-          if [ -z "${REPO_LC}" ] || [ "${REPO_LC}" = "null" ]; then
-            REPO_LC="$(echo "$REPO_PATH" | cut -d'/' -f2)"
-          fi
-          OWNER_LC="${OWNER_LC:-mtgvim}"
-          REPO_LC="${REPO_LC:-tiger-bot}"
-          echo "OWNER_LC=${OWNER_LC,,}" >> "$GITHUB_ENV"
-          echo "REPO_LC=${REPO_LC,,}" >> "$GITHUB_ENV"
-        shell: bash
 
       - name: Build commit summary
         shell: bash
@@ -67,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:latest"
+          IMAGE="${{ env.IMAGE_REPO }}:latest"
           PREV_DIGEST="$(docker buildx imagetools inspect "$IMAGE" 2>/dev/null | awk '/^Digest:/ {print $2; exit}' || true)"
           if [ -z "${PREV_DIGEST:-}" ]; then
             echo "No previous digest for ${IMAGE} (first push or not yet propagated)."
@@ -85,8 +72,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:latest
-            ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:${{ github.sha }}
+            ${{ env.IMAGE_REPO }}:latest
+            ${{ env.IMAGE_REPO }}:${{ github.sha }}
 
       - name: Compare digest change
         shell: bash
@@ -114,7 +101,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:${{ github.sha }}"
+          IMAGE="${{ env.IMAGE_REPO }}:${{ github.sha }}"
           for i in {1..6}; do
             if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
               echo "Verified: $IMAGE"
@@ -141,7 +128,7 @@ jobs:
             echo "DISCORD_WEBHOOK_URL is not set. Skip success notification."
             exit 0
           fi
-          IMAGE="ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:${{ github.sha }}"
+          IMAGE="${{ env.IMAGE_REPO }}:${{ github.sha }}"
           SHORT_SHA="${GITHUB_SHA::7}"
           COMPARE_URL="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}"
           MSG=$(cat <<EOF
