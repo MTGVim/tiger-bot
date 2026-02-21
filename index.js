@@ -10,18 +10,16 @@ const {
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
-const LEETCODE_GRAPHQL_URL = (
-  process.env.LEETCODE_GRAPHQL_URL || "https://leetcode.com/graphql"
+const BOJ_SEARCH_API_URL = (
+  process.env.BOJ_SEARCH_API_URL || "https://solved.ac/api/v3/search/problem"
 ).trim();
-const LEETCODE_FETCH_TIMEOUT_MS = parseInt(process.env.LEETCODE_FETCH_TIMEOUT_MS || "5000", 10);
-const LEETCODE_TODAY_CACHE_PATH = (
-  process.env.LEETCODE_TODAY_CACHE_PATH || "/app/data/leetcode-today.json"
+const BOJ_FETCH_TIMEOUT_MS = parseInt(process.env.BOJ_FETCH_TIMEOUT_MS || "5000", 10);
+const BOJ_TODAY_CACHE_PATH = (
+  process.env.BOJ_TODAY_CACHE_PATH || "/app/data/boj-today.json"
 ).trim();
-const LEETCODE_TODAY_TIMEZONE = (
-  process.env.LEETCODE_TODAY_TIMEZONE || "Asia/Seoul"
+const BOJ_TODAY_TIMEZONE = (
+  process.env.BOJ_TODAY_TIMEZONE || "Asia/Seoul"
 ).trim();
-const LEETCODE_PROBLEM_URL_BASE = "https://leetcode.com/problems";
-const LEETCODE_LIST_PAGE_SIZE = 50;
 const RPS_STATS_PATH = (process.env.RPS_STATS_PATH || "/app/data/rps-stats.json").trim();
 const RPS_PERSIST_LOG_INTERVAL = parseInt(
   process.env.RPS_PERSIST_LOG_INTERVAL || "20",
@@ -234,14 +232,25 @@ function formatLeetDifficultyLabel(difficulty) {
   return "중간";
 }
 
-function hasKoreanCharacters(value) {
-  return /[가-힣]/.test(String(value || ""));
+function getBojTierRangeByDifficulty(difficulty) {
+  if (difficulty === "EASY") return { min: 1, max: 7 };
+  if (difficulty === "HARD") return { min: 13, max: 17 };
+  return { min: 8, max: 12 };
 }
 
-function mapDifficultyForGraphQL(difficulty) {
-  if (difficulty === "EASY") return "Easy";
-  if (difficulty === "HARD") return "Hard";
-  return "Medium";
+function formatBojTier(level) {
+  const tier = Number.isInteger(level) ? level : parseInt(level || "0", 10);
+  if (!Number.isInteger(tier) || tier <= 0) return "Unrated";
+  const bands = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ruby"];
+  const bandIndex = Math.floor((tier - 1) / 5);
+  const withinBand = ((tier - 1) % 5) + 1;
+  const band = bands[bandIndex] || "Tier";
+  const number = 6 - withinBand;
+  return `${band} ${number}`;
+}
+
+function hasKoreanCharacters(value) {
+  return /[가-힣]/.test(String(value || ""));
 }
 
 function ensureLeetTodayCacheShape() {
@@ -293,8 +302,8 @@ function collectExcludedTodayProblemIds(difficulty) {
 
 function resolveLeetTodayTimeZone() {
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: LEETCODE_TODAY_TIMEZONE }).format(new Date());
-    return LEETCODE_TODAY_TIMEZONE;
+    new Intl.DateTimeFormat("en-US", { timeZone: BOJ_TODAY_TIMEZONE }).format(new Date());
+    return BOJ_TODAY_TIMEZONE;
   } catch {
     return "Asia/Seoul";
   }
@@ -322,12 +331,12 @@ async function ensureLeetTodayLoaded() {
     return;
   }
 
-  const dir = path.dirname(LEETCODE_TODAY_CACHE_PATH);
+  const dir = path.dirname(BOJ_TODAY_CACHE_PATH);
   let loadMode = "empty";
 
   try {
     await fs.mkdir(dir, { recursive: true });
-    const raw = await fs.readFile(LEETCODE_TODAY_CACHE_PATH, "utf8");
+    const raw = await fs.readFile(BOJ_TODAY_CACHE_PATH, "utf8");
     try {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object" && parsed.byDate && typeof parsed.byDate === "object") {
@@ -344,14 +353,14 @@ async function ensureLeetTodayLoaded() {
     }
   } catch (err) {
     if (err.code !== "ENOENT") {
-      console.log("[leetcode][WARN] 오늘의문제 캐시 로드 실패:", err.message, "| path:", LEETCODE_TODAY_CACHE_PATH);
+      console.log("[boj][WARN] 오늘의문제 캐시 로드 실패:", err.message, "| path:", BOJ_TODAY_CACHE_PATH);
     }
     leetTodayCache = { byDate: {}, recentByDifficulty: {} };
   }
 
   ensureLeetTodayCacheShape();
   leetTodayLoaded = true;
-  console.log(`[leetcode][INFO] 오늘의문제 캐시 준비 완료: mode=${loadMode} path=${LEETCODE_TODAY_CACHE_PATH}`);
+  console.log(`[boj][INFO] 오늘의문제 캐시 준비 완료: mode=${loadMode} path=${BOJ_TODAY_CACHE_PATH}`);
 }
 
 function pruneLeetTodayCache(maxDays) {
@@ -368,7 +377,7 @@ async function persistLeetTodayCache() {
   await ensureLeetTodayLoaded();
   pruneLeetTodayCache(14);
   const payload = JSON.stringify(leetTodayCache, null, 2);
-  await fs.writeFile(LEETCODE_TODAY_CACHE_PATH, payload, "utf8");
+  await fs.writeFile(BOJ_TODAY_CACHE_PATH, payload, "utf8");
 }
 
 function enqueueLeetTodayTask(task) {
@@ -377,213 +386,76 @@ function enqueueLeetTodayTask(task) {
   return scheduled;
 }
 
-async function fetchLeetcodeGraphql(query, variables = {}) {
+async function fetchBojProblemsPage(range, page) {
+  const query = `tier:${range.min}..${range.max}`;
+  const url = `${BOJ_SEARCH_API_URL}?query=${encodeURIComponent(query)}&page=${page}`;
   const response = await fetchWithTimeout(
-    LEETCODE_GRAPHQL_URL,
+    url,
     {
-      method: "POST",
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json",
         "User-Agent": "daily-problem-bot/1.0",
       },
-      body: JSON.stringify({
-        query,
-        variables,
-      }),
     },
-    LEETCODE_FETCH_TIMEOUT_MS
+    BOJ_FETCH_TIMEOUT_MS
   );
   if (!response.ok) {
-    throw new Error(`LeetCode GraphQL HTTP ${response.status}`);
+    throw new Error(`solved.ac API HTTP ${response.status}`);
   }
-
   const payload = await response.json();
-  if (payload?.errors?.length) {
-    const firstError = payload.errors[0];
-    throw new Error(`LeetCode GraphQL Error: ${(firstError && firstError.message) || "unknown"}`);
+  if (!payload || !Array.isArray(payload.items)) {
+    throw new Error("solved.ac API 응답 형식이 올바르지 않습니다.");
   }
-
   return payload;
-}
-
-async function fetchLeetcodeProblemsPage(difficulty, skip, limit = LEETCODE_LIST_PAGE_SIZE) {
-  const gqlDifficulty = mapDifficultyForGraphQL(difficulty);
-  const query = `
-    query problemsetQuestionList($categorySlug: String, $skip: Int, $limit: Int, $filters: QuestionListFilterInput) {
-      problemsetQuestionList: questionList(
-        categorySlug: $categorySlug,
-        skip: $skip,
-        limit: $limit,
-        filters: $filters
-      ) {
-        total: totalNum
-        questions: data {
-          questionFrontendId
-          title
-          titleSlug
-          difficulty
-          paidOnly: isPaidOnly
-        }
-      }
-    }
-  `;
-
-  let payload;
-  try {
-    payload = await fetchLeetcodeGraphql(query, {
-      categorySlug: "",
-      skip: skip || 0,
-      limit,
-      filters: gqlDifficulty ? { difficulty: gqlDifficulty } : {},
-    });
-  } catch (error) {
-    if (gqlDifficulty && error.message.includes("GraphQL")) {
-      console.log(
-        "[leetcode][WARN] 난이도 필터 적용 실패, 필터 없이 조회 재시도:",
-        error.message
-      );
-      payload = await fetchLeetcodeGraphql(query, {
-        categorySlug: "",
-        skip: skip || 0,
-        limit,
-        filters: {},
-      });
-    } else {
-      throw error;
-    }
-  }
-
-  const result = payload?.data?.problemsetQuestionList || {};
-  const questions = Array.isArray(result.questions) ? result.questions : [];
-  const total = Number(result.total);
-  return {
-    total: Number.isFinite(total) ? total : questions.length,
-    questions,
-  };
-}
-
-async function fetchLeetcodeProblemDetail(titleSlug) {
-  if (!titleSlug) return null;
-
-  const query = `
-    query questionData($titleSlug: String!) {
-      question(titleSlug: $titleSlug) {
-        questionFrontendId
-        title
-        titleSlug
-        translatedTitle
-        paidOnly: isPaidOnly
-        difficulty
-        codeSnippets {
-          lang
-          langSlug
-        }
-      }
-    }
-  `;
-
-  const payload = await fetchLeetcodeGraphql(query, { titleSlug });
-  const question = payload?.data?.question;
-  if (!question || typeof question !== "object") return null;
-  return question;
-}
-
-function hasTypeScriptSupport(question) {
-  const snippets = Array.isArray(question?.codeSnippets) ? question.codeSnippets : [];
-  return snippets.some((snippet) => {
-    const langSlug = String(snippet?.langSlug || snippet?.lang || "").toLowerCase();
-    return langSlug === "typescript";
-  });
 }
 
 async function pickLeetRandomQuestion(difficulty, options = {}) {
   const excludedProblemIds = options.excludedProblemIds instanceof Set
     ? options.excludedProblemIds
     : new Set();
-  const requireKorean = options.requireKoreanTitle !== false;
-
-  const pageSize = LEETCODE_LIST_PAGE_SIZE;
-  const firstPage = await fetchLeetcodeProblemsPage(difficulty, 0, pageSize);
-  const totalCount = firstPage.total;
-  if (!Number.isFinite(totalCount) || totalCount <= 0 || firstPage.questions.length === 0) {
+  const range = getBojTierRangeByDifficulty(difficulty);
+  const firstPagePayload = await fetchBojProblemsPage(range, 1);
+  const totalCount = Number(firstPagePayload.count);
+  const total = Number.isFinite(totalCount) ? totalCount : firstPagePayload.items.length;
+  if (!Number.isFinite(total) || total <= 0) {
     throw new Error("조건에 맞는 문제를 찾지 못했습니다.");
   }
 
-  const maxPage = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pageSize = firstPagePayload.items.length > 0 ? firstPagePayload.items.length : 50;
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
   const maxRandomAttempts = Math.max(6, Math.min(maxPage, 12));
-
   for (let attempt = 0; attempt < maxRandomAttempts; attempt += 1) {
-    const randomPage = Math.floor(Math.random() * maxPage);
-    const payload = randomPage === 0
-      ? firstPage
-      : await fetchLeetcodeProblemsPage(difficulty, randomPage * pageSize, pageSize);
-
-    const raw = payload.questions
-      .map((item) => {
-        const expectedDifficulty = mapDifficultyForGraphQL(difficulty);
-        const problemId = parseInt(String(item.questionFrontendId || ""), 10);
-        if (!Number.isInteger(problemId) || problemId <= 0) return null;
-        if (expectedDifficulty && String(item.difficulty || "").toLowerCase() !== expectedDifficulty.toLowerCase()) {
-          return null;
-        }
-        if (excludedProblemIds.has(problemId)) return null;
-        if (item.paidOnly) return null;
-        return {
-          title: String(item.title || "").trim(),
-          titleSlug: String(item.titleSlug || "").trim(),
-          problemId,
-          difficulty: String(item.difficulty || ""),
-        };
-      })
-      .filter(Boolean);
-
-    const picked = raw[Math.floor(Math.random() * raw.length)];
-    if (!picked) continue;
-
-    const detail = await fetchLeetcodeProblemDetail(picked.titleSlug);
-    if (!detail || !detail.titleSlug) continue;
-    if (detail.paidOnly) continue;
-    if (!hasTypeScriptSupport(detail)) continue;
-
-    const titleKo = String(detail.translatedTitle || detail.title || picked.title || "").trim();
-    const finalTitle = titleKo || picked.title;
-    if (requireKorean && !hasKoreanCharacters(finalTitle)) {
+    const randomPage = 1 + Math.floor(Math.random() * maxPage);
+    const payload = randomPage === 1
+      ? firstPagePayload
+      : await fetchBojProblemsPage(range, randomPage);
+    const pool = payload.items
+      .filter((item) => Number.isInteger(item.problemId))
+      .filter((item) => hasKoreanCharacters(item.titleKo))
+      .filter((item) => !excludedProblemIds.has(item.problemId));
+    if (pool.length === 0) {
       continue;
     }
-
+    const picked = pool[Math.floor(Math.random() * pool.length)];
     return {
-      title: finalTitle,
-      problemId: parseInt(String(detail.questionFrontendId || picked.problemId || ""), 10),
-      slug: detail.titleSlug,
-      level: String(detail.difficulty || picked.difficulty || "").trim(),
-      difficulty,
-      fallbackToEnglish: !hasKoreanCharacters(finalTitle),
+      title: String(picked.titleKo || picked.title || `BOJ ${picked.problemId}`),
+      problemId: picked.problemId,
+      level: Number.isInteger(picked.level) ? picked.level : 0,
     };
   }
 
-  if (requireKorean) {
-    const fallback = await pickLeetRandomQuestion(difficulty, {
-      excludedProblemIds,
-      requireKoreanTitle: false,
-    });
-    if (fallback) {
-      fallback.fallbackToEnglish = true;
-      return fallback;
-    }
-  }
-
-  throw new Error("조건(한글 제목/타입스크립트 지원/중복 제외)에 맞는 문제를 찾지 못했습니다.");
+  throw new Error("조건(한글 제목/중복 제외)에 맞는 문제를 찾지 못했습니다.");
 }
 
 function formatLeetQuestionLine(prefix, difficulty, question) {
   const label = formatLeetDifficultyLabel(difficulty);
-  const displayTitle = question.title || `문제 ${question.problemId}`;
-  const url = `${LEETCODE_PROBLEM_URL_BASE}/${question.slug || question.problemId}`;
-  const titleLocaleTag = question.fallbackToEnglish ? " (영문)" : "";
+  const url = `https://www.acmicpc.net/problem/${question.problemId}`;
+  const tier = formatBojTier(question.level);
   return (
     `${prefix} (${label})\n` +
-    `- 제목: ${displayTitle}${titleLocaleTag}\n` +
+    `- 제목: ${question.title}\n` +
+    `- 티어: ${tier}\n` +
     `- 링크: ${url}`
   );
 }
@@ -746,7 +618,7 @@ client.on("messageCreate", async (msg) => {
       const question = await pickLeetRandomQuestion(difficulty);
       return msg.reply(formatLeetQuestionLine("🎲 랜덤문제", difficulty, question));
     } catch (err) {
-      console.log("[leetcode][WARN] !랜덤 문제 실패:", err.message);
+      console.log("[boj][WARN] !랜덤 문제 실패:", err.message);
       return msg.reply(`⚠️ 랜덤문제 조회 실패: ${err.message}`);
     }
   }
@@ -778,10 +650,10 @@ client.on("messageCreate", async (msg) => {
           delete leetTodayCache.byDate[dateKey];
           await persistLeetTodayCache();
         });
-        console.log(`[leetcode][INFO] 오늘의문제 리셋 완료: date=${dateKey} by=${msg.author.id}`);
+        console.log(`[boj][INFO] 오늘의문제 리셋 완료: date=${dateKey} by=${msg.author.id}`);
         return msg.reply(`🧹 오늘의문제를 리셋했습니다. (${dateKey}, ${timezone})`);
       } catch (err) {
-        console.log("[leetcode][WARN] !오늘의 문제 리셋 실패:", err.message);
+        console.log("[boj][WARN] !오늘의 문제 리셋 실패:", err.message);
         return msg.reply(`⚠️ 오늘의문제 리셋 실패: ${err.message}`);
       }
     }
@@ -825,7 +697,7 @@ client.on("messageCreate", async (msg) => {
         : `📌 오늘의문제 확정 (${dateKey}, ${timezone})`;
       return msg.reply(formatLeetQuestionLine(header, difficulty, selected.question));
     } catch (err) {
-      console.log("[leetcode][WARN] !오늘의 문제 실패:", err.message);
+      console.log("[boj][WARN] !오늘의 문제 실패:", err.message);
       return msg.reply(`⚠️ 오늘의문제 조회 실패: ${err.message}`);
     }
   }
