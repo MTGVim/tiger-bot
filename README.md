@@ -38,6 +38,22 @@
 docker compose up -d
 ```
 
+## 봇 업데이트
+
+운영에서 즉시 반영하려면 아래 순서로 실행한다.
+
+```bash
+git pull
+docker compose pull
+docker compose up -d --build
+```
+
+한 번에 실행하고 싶으면 스크립트를 사용할 수 있다.
+
+```bash
+bash bot-update.sh
+```
+
 ## 명령어
 
 - `!도움`
