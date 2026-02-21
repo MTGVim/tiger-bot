@@ -484,23 +484,33 @@ function requireAdminAuthorization(userId) {
   return { ok: true };
 }
 
-function getAvailableCommandsMessage() {
+function formatAvailableCommands(commands) {
   return (
     "📌 사용 가능한 명령어\n" +
-    "- `!도움` : 사용 가능한 명령어 목록\n" +
-    "- `!랜덤 문제 [쉬움|중간|어려움]` : 난이도별 랜덤 문제 조회\n" +
-    "- `!오늘의 문제 [(쉬움|중간|어려움)]` : 오늘의 문제 고정 조회\n" +
-    "- `!오늘의 문제 리셋` : 당일 문제 캐시 리셋(관리자)\n" +
-    "- `!추첨 [N]` : 온라인 멤버 추첨\n" +
-    "- `!가위바위보 <가위|바위|보>` : 가위바위보 게임\n" +
-    "- `!가위바위보 전적` : 나의 전적 조회\n" +
-    "- `!가위바위보 랭킹 [N]` : 전적 랭킹 조회"
+    commands
+      .map(({ command, description }) => `- \`${command}\` : ${description}`)
+      .join("\n")
   );
+}
+
+function getAvailableCommandsMessage() {
+  const commands = [
+    { command: "!도움", description: "명령어 목록" },
+    { command: "!랜덤 문제 [쉬움|중간|어려움]", description: "난이도별 랜덤 문제 조회" },
+    { command: "!오늘의 문제 [(쉬움|중간|어려움)]", description: "오늘의 문제 고정 조회" },
+    { command: "!오늘의 문제 리셋", description: "당일 문제 캐시 리셋(관리자)" },
+    { command: "!추첨 [N]", description: "온라인 멤버 추첨" },
+    { command: "!가위바위보 <가위|바위|보>", description: "가위바위보 게임" },
+    { command: "!가위바위보 전적", description: "나의 전적 조회" },
+    { command: "!가위바위보 랭킹 [N]", description: "전적 랭킹 조회" },
+  ];
+
+  return formatAvailableCommands(commands);
 }
 
 function formatBootVersionMessage() {
   return (
-    "ℹ️ 봇이 재시작되었습니다.\n" +
+    "ℹ️ 봇이 재시작되었습니다.\n\n" +
     `${getAvailableCommandsMessage()}`
   );
 }
