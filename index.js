@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits } = require("discord.js");
+const { exec } = require("child_process");
 const fs = require("fs/promises");
 const path = require("path");
 const {
@@ -29,6 +30,8 @@ const RPS_RANKING_MIN_GAMES_FOR_WIN_RATE = parseInt(
   process.env.RPS_RANKING_MIN_GAMES_FOR_WIN_RATE || "10",
   10
 );
+const BOT_UPDATE_ENABLED =
+  String(process.env.BOT_UPDATE_ENABLED || "false").toLowerCase() === "true";
 const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
@@ -45,12 +48,75 @@ let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
 let leetTodayQueue = Promise.resolve();
 let rpsStats = {};
 let rpsStatsLoaded = false;
+let updateInProgress = false;
+const WATCHTOWER_IMAGE = (process.env.WATCHTOWER_IMAGE || "containrrr/watchtower:latest").trim();
+const WATCHTOWER_SCOPE = (process.env.WATCHTOWER_SCOPE || "tiger-bot").trim();
 const rpsPersistence = createRpsPersistence({
   fs,
   statsPath: RPS_STATS_PATH,
   logInterval: RPS_PERSIST_LOG_INTERVAL,
   logger: (line) => console.log(line),
 });
+
+function docker(cmd) {
+  console.log("[docker] executing command:", cmd);
+  return new Promise((resolve, reject) => {
+    exec(cmd, (err) => {
+      if (err) {
+        console.log("[docker] command failed:", cmd, "| error:", err.message);
+        reject(err);
+      } else {
+        console.log("[docker] command succeeded:", cmd);
+        resolve();
+      }
+    });
+  });
+}
+
+function isSafeDockerRef(value) {
+  return /^[A-Za-z0-9._:@/-]+$/.test(value);
+}
+
+function isSafeWatchtowerScope(value) {
+  return /^[A-Za-z0-9._-]+$/.test(value);
+}
+
+function getWatchtowerRunOnceCommand() {
+  if (!isSafeDockerRef(WATCHTOWER_IMAGE)) {
+    throw new Error(
+      "WATCHTOWER_IMAGE 값이 안전하지 않습니다. 영문/숫자/._:@/- 문자만 사용해주세요."
+    );
+  }
+  if (!isSafeWatchtowerScope(WATCHTOWER_SCOPE)) {
+    throw new Error(
+      "WATCHTOWER_SCOPE 값이 안전하지 않습니다. 영문/숫자/._- 문자만 사용해주세요."
+    );
+  }
+
+  return (
+    "docker run --rm " +
+    "-v /var/run/docker.sock:/var/run/docker.sock " +
+    `${WATCHTOWER_IMAGE} ` +
+    `--run-once --cleanup --label-enable --scope ${WATCHTOWER_SCOPE}`
+  );
+}
+
+function isAuthorizedUpdater(userId) {
+  const adminAuth = requireAdminAuthorization(userId);
+  if (!adminAuth.ok) {
+    return adminAuth;
+  }
+
+  if (!BOT_UPDATE_ENABLED) {
+    return {
+      ok: false,
+      message:
+        "⚠️ 봇 업데이트 기능이 비활성화되어 있습니다. `BOT_UPDATE_ENABLED=true`로 설정해주세요.",
+    };
+  }
+
+  return { ok: true };
+}
 
 function pickRandomMembers(members, count) {
   if (!Array.isArray(members) || members.length === 0 || count <= 0) {
@@ -503,6 +569,7 @@ function getAvailableCommandsMessage() {
     { command: "!가위바위보 <가위|바위|보>", description: "가위바위보 게임" },
     { command: "!가위바위보 전적", description: "나의 전적 조회" },
     { command: "!가위바위보 랭킹 [N]", description: "전적 랭킹 조회" },
+    { command: "!봇 업데이트", description: "watchtower 1회 실행으로 업데이트" },
   ];
 
   return formatAvailableCommands(commands);
@@ -559,6 +626,36 @@ client.on("messageCreate", async (msg) => {
 
   if (content === "!도움") {
     msg.reply(getAvailableCommandsMessage());
+    return;
+  }
+
+  if (content === "!봇 업데이트" || content === "!봇업데이트") {
+    if (updateInProgress) {
+      return msg.reply("⏳ 이미 업데이트 작업이 진행 중입니다.");
+    }
+
+    const auth = isAuthorizedUpdater(msg.author.id);
+    if (!auth.ok) {
+      return msg.reply(auth.message);
+    }
+
+    updateInProgress = true;
+    await msg.reply("🔄 봇 이미지 업데이트 확인을 시작하고 봇을 재시작합니다.");
+
+    try {
+      const runOnceCommand = getWatchtowerRunOnceCommand();
+      await docker(runOnceCommand);
+      await msg.channel.send(
+        `업데이트 확인이 완료되었습니다.\n- scope: ${WATCHTOWER_SCOPE}\n- 명령어: \`${runOnceCommand}\``
+      );
+    } catch (err) {
+      console.log("[command] !봇 업데이트 failed:", err.message);
+      await msg.channel.send(
+        "⚠️ 봇 업데이트 실행에 실패했습니다. Docker 접근 권한, WATCHTOWER_IMAGE, 라벨 설정을 확인해주세요."
+      );
+    } finally {
+      updateInProgress = false;
+    }
     return;
   }
 

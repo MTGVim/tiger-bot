@@ -10,6 +10,7 @@
 - `!가위바위보 전적` : 내 전적 조회
 - `!가위바위보 랭킹 [N]` : 가위바위보 랭킹 조회
 - `!도움` : 사용 가능한 명령어
+- `!봇 업데이트` : watchtower 1회 실행으로 업데이트
 
 난이도
 - `쉬움` (`easy`, `e`) : 티어 1..7
@@ -27,6 +28,9 @@
 | `BOJ_TODAY_TIMEZONE` | 아니오 | `Asia/Seoul` | 오늘의 문제 날짜 기준 타임존 |
 | `ADMIN_USER_IDS` | 아니오 | `""` | `!오늘의 문제 리셋` 실행 가능한 Discord 사용자 ID 목록(쉼표 구분) |
 | `ALLOWED_CHANNEL_ID` | 아니오 | `""` | 봇이 반응할 단일 채널 ID. 빈 값이면 모든 채널 허용. (재시작 알림도 이 채널로 전송) |
+| `BOT_UPDATE_ENABLED` | 아니오 | `false` | `!봇 업데이트` 실행 여부 (`true`/`false`) |
+| `WATCHTOWER_IMAGE` | 아니오 | `containrrr/watchtower:latest` | 업데이트 one-shot 실행 시 사용할 이미지 |
+| `WATCHTOWER_SCOPE` | 아니오 | `tiger-bot` | watchtower one-shot의 scope(`--scope`) |
 | `RPS_STATS_PATH` | 아니오 | `/app/data/rps-stats.json` | 가위바위보 전적 저장 파일 경로 |
 | `RPS_PERSIST_LOG_INTERVAL` | 아니오 | `20` | 가위바위보 전적 저장 로그 출력 간격(쓰기 횟수 기준, `0` 이하면 1회만 출력) |
 | `RPS_RANKING_MIN_GAMES_FOR_WIN_RATE` | 아니오 | `10` | 랭킹에서 승률 표기 임계값 |
@@ -66,11 +70,15 @@ docker compose up -d
 ## 봇 업데이트
 
 이 저장소는 이미지를 갱신하는 Watchtower 방식으로 운영한다.
+`!봇 업데이트`는 ADMIN_USER_IDS에 등록된 사용자만 수행할 수 있으며, `BOT_UPDATE_ENABLED=true`일 때만 동작한다.
 
 GitHub Actions에서 `ghcr.io/mtgvim/tiger-bot:latest`로 최신 이미지가 push되면
 라벨 `com.centurylinklabs.watchtower.enable=true`가 있는 컨테이너만 자동 갱신된다.
 (`.github/workflows/docker.yml` 기준 `master/main` 브랜치 푸시 시 `ghcr.io/mtgvim/tiger-bot:latest` 태그로 push)
 `com.centurylinklabs.watchtower.scope=tiger-bot` 라벨로 갱신 대상 스택을 고정한다.
+`!봇 업데이트`도 같은 scope(`WATCHTOWER_SCOPE`) 기준으로 one-shot 실행한다.
+
+※ `!봇 업데이트` 실행에는 `/var/run/docker.sock` 마운트가 필요하다.
 
 수동으로 1회 갱신하려면 아래 명령을 실행한다.
 
@@ -106,3 +114,4 @@ docker run --rm \
 - `!가위바위보 <가위|바위|보>`
 - `!가위바위보 전적`
 - `!가위바위보 랭킹 [N]`
+- `!봇 업데이트` (관리자)
