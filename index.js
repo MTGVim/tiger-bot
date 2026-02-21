@@ -1,6 +1,12 @@
 const { Client, GatewayIntentBits } = require("discord.js");
 const fs = require("fs/promises");
 const path = require("path");
+const {
+  createRpsPersistence,
+  evaluateRps,
+  getOrCreateRpsRecord,
+  normalizeRpsChoice,
+} = require("./rps-core");
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
@@ -14,6 +20,15 @@ const BOJ_TODAY_CACHE_PATH = (
 const BOJ_TODAY_TIMEZONE = (
   process.env.BOJ_TODAY_TIMEZONE || "Asia/Seoul"
 ).trim();
+const RPS_STATS_PATH = (process.env.RPS_STATS_PATH || "/app/data/rps-stats.json").trim();
+const RPS_PERSIST_LOG_INTERVAL = parseInt(
+  process.env.RPS_PERSIST_LOG_INTERVAL || "20",
+  10
+);
+const RPS_RANKING_MIN_GAMES_FOR_WIN_RATE = parseInt(
+  process.env.RPS_RANKING_MIN_GAMES_FOR_WIN_RATE || "10",
+  10
+);
 const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
@@ -22,6 +37,163 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
 let leetTodayLoaded = false;
 let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
 let leetTodayQueue = Promise.resolve();
+let rpsStats = {};
+let rpsStatsLoaded = false;
+const rpsPersistence = createRpsPersistence({
+  fs,
+  statsPath: RPS_STATS_PATH,
+  logInterval: RPS_PERSIST_LOG_INTERVAL,
+  logger: (line) => console.log(line),
+});
+
+function pickRandomMembers(members, count) {
+  if (!Array.isArray(members) || members.length === 0 || count <= 0) {
+    return [];
+  }
+  const pool = members.slice(0);
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
+
+function formatRpsRecord(record) {
+  const safe = {
+    wins: Number.isFinite(record?.wins) ? record.wins : 0,
+    losses: Number.isFinite(record?.losses) ? record.losses : 0,
+    draws: Number.isFinite(record?.draws) ? record.draws : 0,
+    games: Number.isFinite(record?.games) ? record.games : 0,
+  };
+  const winRate = safe.games > 0 ? ((safe.wins / safe.games) * 100).toFixed(2) : "0.00";
+
+  return `승: ${safe.wins} / 패: ${safe.losses} / 무: ${safe.draws} / 판수: ${safe.games} (승률 ${winRate}%)`;
+}
+
+function formatRankingWinRate(record) {
+  if (!record || !Number.isFinite(record.games) || record.games < RPS_RANKING_MIN_GAMES_FOR_WIN_RATE) {
+    return `${RPS_RANKING_MIN_GAMES_FOR_WIN_RATE}판 미만 🐥`;
+  }
+
+  const winRate = ((record.wins / record.games) * 100).toFixed(1);
+  return `${winRate}%`;
+}
+
+async function ensureRpsStatsLoaded() {
+  if (rpsStatsLoaded) {
+    return;
+  }
+
+  try {
+    const raw = await fs.readFile(RPS_STATS_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      rpsStats = parsed;
+    } else {
+      rpsStats = {};
+    }
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.log("[rps][WARN] 전적 파일 로드 실패:", err.message, "| path:", RPS_STATS_PATH);
+    }
+    rpsStats = {};
+  } finally {
+    rpsStatsLoaded = true;
+    const totalUsers = Object.keys(rpsStats).length;
+    const totalGames = Object.values(rpsStats).reduce((sum, row) => (
+      sum + (Number.isInteger(row?.games) ? row.games : 0)
+    ), 0);
+    console.log(
+      `[rps][INFO] 전적 준비 완료: path=${RPS_STATS_PATH} users=${totalUsers} games=${totalGames}`
+    );
+  }
+}
+
+function getRpsRanking(limit) {
+  const rankingLimit = Math.max(1, Math.min(limit, 30));
+  return Object.entries(rpsStats)
+    .map(([userId, row]) => {
+      const record = getOrCreateRpsRecord(rpsStats, userId);
+      const safeWins = Number.isInteger(record.wins) ? record.wins : 0;
+      const safeGames = Number.isInteger(record.games) ? record.games : 0;
+      const winRate = safeGames > 0 ? safeWins / safeGames : 0;
+      return {
+        userId,
+        record,
+        wins: safeWins,
+        games: safeGames,
+        winRate,
+      };
+    })
+    .sort((a, b) => {
+      if (a.winRate !== b.winRate) return b.winRate - a.winRate;
+      if (a.wins !== b.wins) return b.wins - a.wins;
+      return b.games - a.games;
+    })
+    .slice(0, rankingLimit);
+}
+
+async function updateRpsStatsForUser(userId, result) {
+  const record = getOrCreateRpsRecord(rpsStats, userId);
+  if (result === "승리") {
+    record.wins += 1;
+  } else if (result === "패배") {
+    record.losses += 1;
+  } else {
+    record.draws += 1;
+  }
+  record.games += 1;
+  record.updatedAt = new Date().toISOString();
+  await rpsPersistence.persist(rpsStats);
+  return record;
+}
+
+function rpsChoiceEmoji(choice) {
+  if (choice === "가위") return "✌️";
+  if (choice === "바위") return "👊";
+  if (choice === "보") return "🖐️";
+  return "❓";
+}
+
+function rpsResultEmoji(result) {
+  if (result === "승리") return "🎉";
+  if (result === "패배") return "🤕";
+  return "🤝";
+}
+
+function isOnlineMember(member) {
+  if (!member || member.user?.bot) {
+    return false;
+  }
+  const status = member.presence?.status;
+  if (!status) {
+    return true;
+  }
+  return status === "online" || status === "idle" || status === "dnd";
+}
+
+async function getOnlineHumanMembers(guild) {
+  if (!guild?.members?.fetch) {
+    return {
+      ok: false,
+      message:
+        "⚠️ 서버 멤버 조회 권한이 없습니다. `GuildMembers`/`GuildPresences` 인텐트를 켜주세요.",
+    };
+  }
+
+  let members;
+  try {
+    members = await guild.members.fetch({ withPresences: true });
+  } catch (err) {
+    return {
+      ok: false,
+      message: `⚠️ 온라인 멤버 조회 실패: ${err.message}`,
+    };
+  }
+
+  const humanOnline = [...members.values()].filter(isOnlineMember);
+  return { ok: true, members: humanOnline };
+}
 
 function isSafeUserId(value) {
   return /^\d+$/.test(String(value || ""));
@@ -309,6 +481,8 @@ function requireAdminAuthorization(userId) {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
@@ -337,9 +511,99 @@ client.on("messageCreate", async (msg) => {
         "!도움\n" +
         "!랜덤 문제 [쉬움|중간|어려움]\n" +
         "!오늘의 문제 [(쉬움|중간|어려움)]\n" +
-        "!오늘의 문제 리셋 (관리자)"
+        "!오늘의 문제 리셋 (관리자)\n" +
+        "!추첨 [N]\n" +
+        "!가위바위보 <가위|바위|보>\n" +
+        "!가위바위보 전적\n" +
+        "!가위바위보 랭킹 [N]"
     );
     return;
+  }
+
+  const raffleMatch = content.match(/^!추첨(?:\s+(\d+))?$/);
+  if (raffleMatch) {
+    const requestedCount = raffleMatch[1] ? parseInt(raffleMatch[1], 10) : 1;
+    if (!Number.isInteger(requestedCount) || requestedCount <= 0) {
+      return msg.reply("⚠️ 사용법: `!추첨` 또는 `!추첨 N` (N은 1 이상의 정수)");
+    }
+
+    const onlineResult = await getOnlineHumanMembers(msg.guild);
+    if (!onlineResult.ok) {
+      return msg.reply(onlineResult.message);
+    }
+
+    const onlineMembers = onlineResult.members;
+    if (requestedCount > onlineMembers.length) {
+      return msg.reply(
+        `⚠️ 온라인 유저는 ${onlineMembers.length}명입니다. \`!추첨 ${onlineMembers.length}\` 이하로 입력해주세요.`
+      );
+    }
+
+    const winners = pickRandomMembers(onlineMembers, requestedCount);
+    const mentions = winners.map((member) => `<@${member.id}>`).join(", ");
+
+    if (requestedCount === 1) {
+      return msg.reply(`🎉 추첨 결과: ${mentions}`);
+    }
+
+    return msg.reply(
+      `🎉 추첨 결과 (${requestedCount}명 / 온라인 ${onlineMembers.length}명)\n${mentions}`
+    );
+  }
+
+  const rpsMatch = content.match(/^!가위바위보(?:\s+(.+))?$/);
+  if (rpsMatch) {
+    await ensureRpsStatsLoaded();
+
+    const rpsArg = String(rpsMatch[1] || "").trim();
+    if (!rpsArg) {
+      return msg.reply(
+        "⚠️ 사용법: `!가위바위보 가위|바위|보`, `!가위바위보 전적`, `!가위바위보 랭킹 [N]`"
+      );
+    }
+
+    if (rpsArg === "전적") {
+      const record = getOrCreateRpsRecord(rpsStats, msg.author.id);
+      return msg.reply(`📊 <@${msg.author.id}> 기록\n${formatRpsRecord(record)}`);
+    }
+
+    const rankingMatch = rpsArg.match(/^랭킹(?:\s+(\d+))?$/);
+    if (rankingMatch) {
+      const limit = rankingMatch[1] ? parseInt(rankingMatch[1], 10) : 10;
+      if (!Number.isInteger(limit) || limit <= 0) {
+        return msg.reply("⚠️ 사용법: `!가위바위보 랭킹` 또는 `!가위바위보 랭킹 N`");
+      }
+
+      const ranking = getRpsRanking(Math.min(limit, 30));
+      if (ranking.length === 0) {
+        return msg.reply("📊 아직 가위바위보 전적이 없습니다.");
+      }
+
+      const lines = ranking.map((row, index) => (
+        `${index + 1}. <@${row.userId}> - ${formatRpsRecord(row.record)} | 승률 ${formatRankingWinRate(row.record)}`
+      ));
+      return msg.reply(`🏆 가위바위보 랭킹 TOP ${ranking.length}\n${lines.join("\n")}`);
+    }
+
+    const userChoice = normalizeRpsChoice(rpsArg);
+    if (!userChoice) {
+      return msg.reply(
+        "⚠️ 사용법: `!가위바위보 가위|바위|보`, `!가위바위보 전적`, `!가위바위보 랭킹 [N]`"
+      );
+    }
+
+    const botChoice = ["가위", "바위", "보"][Math.floor(Math.random() * 3)];
+    const result = evaluateRps(userChoice, botChoice);
+    const record = await updateRpsStatsForUser(msg.author.id, result);
+    const requesterName = (
+      msg.member?.displayName ||
+      msg.author.globalName ||
+      msg.author.username ||
+      "플레이어"
+    ).trim();
+    return msg.reply(
+      `${requesterName}${rpsChoiceEmoji(userChoice)} vs ${rpsChoiceEmoji(botChoice)} = ${rpsResultEmoji(result)} ${result}\n📈 ${formatRpsRecord(record)}`
+    );
   }
 
   const randomQuestionMatch = content.match(/^!(?:랜덤문제|랜덤\s+문제)(?:\s+(.+))?$/);

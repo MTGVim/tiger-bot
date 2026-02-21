@@ -1,5 +1,5 @@
 {
-    "name": "daily-problem-bot",
+    "name": "tiger-bot",
     "version": "1.0.0",
     "dependencies": {
       "discord.js": "^14.14.1"
