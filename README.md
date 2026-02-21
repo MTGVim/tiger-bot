@@ -39,6 +39,30 @@
 docker compose up -d
 ```
 
+## 디스코드 초대 가이드
+
+봇을 서버에 붙이려면 Discord 개발자 포털에서 초대 링크를 직접 만들어야 한다.
+
+1. Discord Developer Portal → `Applications` → 앱 선택 → `OAuth2` → `URL Generator`
+2. `SCOPES`에서 `bot`만 체크
+3. `Bot Permissions`에서 최소 권한:
+   - `Read Message History`
+   - `Send Messages`
+   - `Embed Links`
+   - `Attach Files`(선택)
+4. 생성된 URL로 서버를 선택해 초대
+5. 봇 토큰 발급/등록 후 아래 인텐트 ON:
+   - `Message Content`
+   - `Guild Members` (온라인 멤버 추첨 기능 사용 시)
+   - `Guild Presences` (온라인 상태 판별 시)
+
+실수 줄이기 체크
+- `Read Message History` 누락: 일부 채널에서 응답이 가끔 안 보이는 것처럼 보임
+- `Message Content` 누락: `!랜덤 문제` 계열 명령이 아예 안 들어옴
+- 초대할 채널만 쓰려면 `ALLOWED_CHANNEL_IDS`에 채널 ID를 넣어서 제한
+
+채널 ID는 개발자 모드에서 채널 우클릭 → `ID 복사`로 얻는다.
+
 ## 봇 업데이트
 
 이 저장소는 이미지를 갱신하는 Watchtower 방식으로 운영한다.
