@@ -36,29 +36,54 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-function resolveAllowedChannelId() {
-  const primary = String(process.env.ALLOWED_CHANNEL_ID || "").trim();
-  if (primary) {
-    return primary.split(",")[0].trim();
-  }
 
-  const legacy = String(process.env.ALLOWED_CHANNEL_IDS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)[0];
-  if (legacy) {
-    console.log(
-      "[config] ALLOWED_CHANNEL_ID 미설정. ALLOWED_CHANNEL_IDS에서 첫 번째 값을 허용 채널로 사용합니다."
-    );
-    return legacy;
+function normalizeChannelId(input) {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    return "";
   }
-
-  console.log("[config] 허용 채널 미설정: 모든 채널 허용 모드");
-  return "";
+  const cleaned = raw.replace(/^<#[!#]?\d+>$/g, (match) => (
+    match.replace("<#", "").replace(">", "")
+  ));
+  return cleaned.trim().replace(/[\s,]+/g, "");
 }
 
-const ALLOWED_CHANNEL_ID = resolveAllowedChannelId();
-console.log(`[config] allowed channel filter: ${ALLOWED_CHANNEL_ID || "(all)"}`);
+function resolveAllowedChannelIds() {
+  const candidates = [];
+
+  const primary = normalizeChannelId(process.env.ALLOWED_CHANNEL_ID || "");
+  if (primary) {
+    candidates.push(...primary.split(",").map((value) => value.trim()).filter(Boolean));
+  }
+
+  if (candidates.length === 0) {
+    const legacyRaw = String(process.env.ALLOWED_CHANNEL_IDS || "")
+      .split(",")
+      .map((value) => normalizeChannelId(value))
+      .filter(Boolean);
+    if (legacyRaw.length > 0) {
+      candidates.push(...legacyRaw);
+      console.log("[config] ALLOWED_CHANNEL_ID 미설정. ALLOWED_CHANNEL_IDS에서 채널을 fallback으로 사용합니다.");
+    }
+  }
+
+  const allowedSet = new Set(candidates);
+  if (allowedSet.size === 0) {
+    console.log("[config] 허용 채널 미설정: 모든 채널 허용 모드");
+  } else {
+    console.log(`[config] allowed channels: ${Array.from(allowedSet).join(",")}`);
+  }
+
+  return allowedSet;
+}
+
+const ALLOWED_CHANNEL_SET = resolveAllowedChannelIds();
+function isAllowedChannel(channelId) {
+  return ALLOWED_CHANNEL_SET.size === 0 || ALLOWED_CHANNEL_SET.has(channelId);
+}
+function getPrimaryAllowedChannelId() {
+  return ALLOWED_CHANNEL_SET.size > 0 ? ALLOWED_CHANNEL_SET.values().next().value : "";
+}
 
 let leetTodayLoaded = false;
 let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
@@ -612,12 +637,13 @@ const client = new Client({
 client.on("ready", async () => {
   console.log("문제 출제 봇 준비 완료");
   await ensureLeetTodayLoaded();
-  if (!ALLOWED_CHANNEL_ID) {
+  const allowedChannelId = getPrimaryAllowedChannelId();
+  if (!allowedChannelId) {
     return;
   }
 
   try {
-    const statusChannel = await client.channels.fetch(ALLOWED_CHANNEL_ID);
+    const statusChannel = await client.channels.fetch(allowedChannelId);
     if (!statusChannel || !statusChannel.isTextBased()) {
       console.log("[status] allowed channel is not a text channel.");
       return;
@@ -630,7 +656,7 @@ client.on("ready", async () => {
 
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
-  if (ALLOWED_CHANNEL_ID && msg.channelId !== ALLOWED_CHANNEL_ID) return;
+  if (!isAllowedChannel(msg.channelId)) return;
 
   const content = msg.content.trim();
 
