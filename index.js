@@ -33,12 +33,12 @@ const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-const ALLOWED_CHANNEL_IDS = new Set(
-  (process.env.ALLOWED_CHANNEL_IDS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-);
+const ALLOWED_CHANNEL_ID = String(
+  process.env.ALLOWED_CHANNEL_ID || ""
+)
+  .trim()
+  .split(",")[0]
+  .trim();
 
 let leetTodayLoaded = false;
 let leetTodayCache = { byDate: {}, recentByDifficulty: {} };
@@ -484,6 +484,27 @@ function requireAdminAuthorization(userId) {
   return { ok: true };
 }
 
+function getAvailableCommandsMessage() {
+  return (
+    "📌 사용 가능한 명령어\n" +
+    "- `!도움` : 사용 가능한 명령어 목록\n" +
+    "- `!랜덤 문제 [쉬움|중간|어려움]` : 난이도별 랜덤 문제 조회\n" +
+    "- `!오늘의 문제 [(쉬움|중간|어려움)]` : 오늘의 문제 고정 조회\n" +
+    "- `!오늘의 문제 리셋` : 당일 문제 캐시 리셋(관리자)\n" +
+    "- `!추첨 [N]` : 온라인 멤버 추첨\n" +
+    "- `!가위바위보 <가위|바위|보>` : 가위바위보 게임\n" +
+    "- `!가위바위보 전적` : 나의 전적 조회\n" +
+    "- `!가위바위보 랭킹 [N]` : 전적 랭킹 조회"
+  );
+}
+
+function formatBootVersionMessage() {
+  return (
+    "ℹ️ 봇이 재시작되었습니다.\n" +
+    `${getAvailableCommandsMessage()}`
+  );
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -494,14 +515,28 @@ const client = new Client({
   ],
 });
 
-client.on("clientReady", async () => {
+client.on("ready", async () => {
   console.log("문제 출제 봇 준비 완료");
   await ensureLeetTodayLoaded();
+  if (!ALLOWED_CHANNEL_ID) {
+    return;
+  }
+
+  try {
+    const statusChannel = await client.channels.fetch(ALLOWED_CHANNEL_ID);
+    if (!statusChannel || !statusChannel.isTextBased()) {
+      console.log("[status] allowed channel is not a text channel.");
+      return;
+    }
+    await statusChannel.send(formatBootVersionMessage());
+  } catch (err) {
+    console.log("[status] failed to send restart message:", err.message);
+  }
 });
 
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
-  if (ALLOWED_CHANNEL_IDS.size > 0 && !ALLOWED_CHANNEL_IDS.has(msg.channelId)) return;
+  if (ALLOWED_CHANNEL_ID && msg.channelId !== ALLOWED_CHANNEL_ID) return;
 
   const content = msg.content.trim();
 
@@ -513,17 +548,7 @@ client.on("messageCreate", async (msg) => {
   );
 
   if (content === "!도움") {
-    msg.reply(
-      "📌 사용 가능한 명령어\n" +
-        "!도움\n" +
-        "!랜덤 문제 [쉬움|중간|어려움]\n" +
-        "!오늘의 문제 [(쉬움|중간|어려움)]\n" +
-        "!오늘의 문제 리셋 (관리자)\n" +
-        "!추첨 [N]\n" +
-        "!가위바위보 <가위|바위|보>\n" +
-        "!가위바위보 전적\n" +
-        "!가위바위보 랭킹 [N]"
-    );
+    msg.reply(getAvailableCommandsMessage());
     return;
   }
 

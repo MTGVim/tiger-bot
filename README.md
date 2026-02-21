@@ -26,7 +26,7 @@
 | `BOJ_TODAY_CACHE_PATH` | 아니오 | `/app/data/boj-today.json` | 오늘의 문제 캐시 파일 경로 |
 | `BOJ_TODAY_TIMEZONE` | 아니오 | `Asia/Seoul` | 오늘의 문제 날짜 기준 타임존 |
 | `ADMIN_USER_IDS` | 아니오 | `""` | `!오늘의 문제 리셋` 실행 가능한 Discord 사용자 ID 목록(쉼표 구분) |
-| `ALLOWED_CHANNEL_IDS` | 아니오 | `""` | 봇이 반응할 채널 ID 목록(쉼표 구분). 빈 값이면 모든 채널 허용 |
+| `ALLOWED_CHANNEL_ID` | 아니오 | `""` | 봇이 반응할 단일 채널 ID. 빈 값이면 모든 채널 허용. (재시작 알림도 이 채널로 전송) |
 | `RPS_STATS_PATH` | 아니오 | `/app/data/rps-stats.json` | 가위바위보 전적 저장 파일 경로 |
 | `RPS_PERSIST_LOG_INTERVAL` | 아니오 | `20` | 가위바위보 전적 저장 로그 출력 간격(쓰기 횟수 기준, `0` 이하면 1회만 출력) |
 | `RPS_RANKING_MIN_GAMES_FOR_WIN_RATE` | 아니오 | `10` | 랭킹에서 승률 표기 임계값 |
@@ -59,7 +59,7 @@ docker compose up -d
 실수 줄이기 체크
 - `Read Message History` 누락: 일부 채널에서 응답이 가끔 안 보이는 것처럼 보임
 - `Message Content` 누락: `!랜덤 문제` 계열 명령이 아예 안 들어옴
-- 초대할 채널만 쓰려면 `ALLOWED_CHANNEL_IDS`에 채널 ID를 넣어서 제한
+- 초대할 채널만 쓰려면 `ALLOWED_CHANNEL_ID`에 채널 ID를 넣어서 제한
 
 채널 ID는 개발자 모드에서 채널 우클릭 → `ID 복사`로 얻는다.
 
