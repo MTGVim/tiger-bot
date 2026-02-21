@@ -68,7 +68,10 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${{ env.OWNER_LC }}/${{ env.REPO_LC }}:latest"
-          PREV_DIGEST="$(docker buildx imagetools inspect "$IMAGE" 2>/dev/null | awk '/^Digest:/ {print $2; exit}')"
+          PREV_DIGEST="$(docker buildx imagetools inspect "$IMAGE" 2>/dev/null | awk '/^Digest:/ {print $2; exit}' || true)"
+          if [ -z "${PREV_DIGEST:-}" ]; then
+            echo "No previous digest for ${IMAGE} (first push or not yet propagated)."
+          fi
           echo "PREV_LATEST_DIGEST=${PREV_DIGEST:-}" >> "$GITHUB_ENV"
 
       - name: Build & Push
