@@ -5,6 +5,9 @@ function normalizeRpsChoice(raw) {
   if (value === "가위" || value === "scissors") return "가위";
   if (value === "바위" || value === "rock") return "바위";
   if (value === "보" || value === "paper") return "보";
+  if (value === "r") return "바위";
+  if (value === "p") return "보";
+  if (value === "s") return "가위";
   return "";
 }
 

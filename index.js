@@ -627,12 +627,9 @@ function getAvailableCommandsMessage() {
     { command: "!오늘의 문제 [(쉬움|중간|어려움)]", description: "오늘의 문제 고정 조회" },
     { command: "!오늘의 문제 리셋", description: "당일 문제 캐시 리셋(관리자)" },
     { command: "!추첨 [N]", description: "온라인 멤버 추첨" },
-    { command: "!가위바위보 <가위|바위|보>", description: "가위바위보 게임" },
-    { command: "!가위바위보 전적", description: "나의 전적 조회" },
-    { command: "!가위바위보 랭킹 [N]", description: "전적 랭킹 조회" },
-    { command: "!rps <가위|바위|보>", description: "가위바위보 게임(단축)" },
-    { command: "!rps 전적", description: "나의 전적 조회(단축)" },
-    { command: "!rps 랭킹 [N]", description: "전적 랭킹 조회(단축)" },
+    { command: "!<가위바위보|rps> <가위|바위|보|r|p|s>", description: "가위바위보 1판 진행" },
+    { command: "!<가위바위보|rps> 전적", description: "나의 가위바위보 전적 조회" },
+    { command: "!<가위바위보|rps> 랭킹 [N]", description: "가위바위보 랭킹 조회" },
     { command: "!봇 업데이트", description: "봇 최신 버전 업데이트" },
   ];
 
@@ -649,7 +646,7 @@ function formatBootVersionMessage() {
 function getRpsUsageMessage(prefixCommand) {
   const command = prefixCommand || "가위바위보";
   return (
-    `⚠️ 사용법: \`!${command} 가위|바위|보\`, ` +
+    `⚠️ 사용법: \`!${command} <가위|바위|보|r|p|s>\`, ` +
     `\`!${command} 전적\`, \`!${command} 랭킹 [N]\``
   );
 }
