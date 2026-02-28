@@ -630,6 +630,9 @@ function getAvailableCommandsMessage() {
     { command: "!가위바위보 <가위|바위|보>", description: "가위바위보 게임" },
     { command: "!가위바위보 전적", description: "나의 전적 조회" },
     { command: "!가위바위보 랭킹 [N]", description: "전적 랭킹 조회" },
+    { command: "!rps <가위|바위|보>", description: "가위바위보 게임(단축)" },
+    { command: "!rps 전적", description: "나의 전적 조회(단축)" },
+    { command: "!rps 랭킹 [N]", description: "전적 랭킹 조회(단축)" },
     { command: "!봇 업데이트", description: "봇 최신 버전 업데이트" },
   ];
 
@@ -640,6 +643,64 @@ function formatBootVersionMessage() {
   return (
     "ℹ️ 봇이 재시작되었습니다.\n\n" +
     `${getAvailableCommandsMessage()}`
+  );
+}
+
+function getRpsUsageMessage(prefixCommand) {
+  const command = prefixCommand || "가위바위보";
+  return (
+    `⚠️ 사용법: \`!${command} 가위|바위|보\`, ` +
+    `\`!${command} 전적\`, \`!${command} 랭킹 [N]\``
+  );
+}
+
+async function handleRpsSubcommand(msg, rawArg, sourceCommand) {
+  await ensureRpsStatsLoaded();
+
+  const rpsArg = String(rawArg || "").trim();
+  if (!rpsArg) {
+    return msg.reply(getRpsUsageMessage(sourceCommand));
+  }
+
+  if (rpsArg === "전적") {
+    const record = getOrCreateRpsRecord(rpsStats, msg.author.id);
+    return msg.reply(`📊 <@${msg.author.id}> 기록\n${formatRpsRecord(record)}`);
+  }
+
+  const rankingMatch = rpsArg.match(/^랭킹(?:\s+(\d+))?$/);
+  if (rankingMatch) {
+    const limit = rankingMatch[1] ? parseInt(rankingMatch[1], 10) : 10;
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return msg.reply(getRpsUsageMessage(sourceCommand));
+    }
+
+    const ranking = getRpsRanking(Math.min(limit, 30));
+    if (ranking.length === 0) {
+      return msg.reply("📊 아직 가위바위보 전적이 없습니다.");
+    }
+
+    const lines = ranking.map((row, index) => (
+      `${index + 1}. <@${row.userId}> - ${formatRpsRecord(row.record)} | 승률 ${formatRankingWinRate(row.record)}`
+    ));
+    return msg.reply(`🏆 가위바위보 랭킹 TOP ${ranking.length}\n${lines.join("\n")}`);
+  }
+
+  const userChoice = normalizeRpsChoice(rpsArg);
+  if (!userChoice) {
+    return msg.reply(getRpsUsageMessage(sourceCommand));
+  }
+
+  const botChoice = ["가위", "바위", "보"][Math.floor(Math.random() * 3)];
+  const result = evaluateRps(userChoice, botChoice);
+  const record = await updateRpsStatsForUser(msg.author.id, result);
+  const requesterName = (
+    msg.member?.displayName ||
+    msg.author.globalName ||
+    msg.author.username ||
+    "플레이어"
+  ).trim();
+  return msg.reply(
+    `${requesterName}${rpsChoiceEmoji(userChoice)} vs ${rpsChoiceEmoji(botChoice)} = ${rpsResultEmoji(result)} ${result}\n📈 ${formatRpsRecord(record)}`
   );
 }
 
@@ -751,57 +812,12 @@ client.on("messageCreate", async (msg) => {
 
   const rpsMatch = content.match(/^!가위바위보(?:\s+(.+))?$/);
   if (rpsMatch) {
-    await ensureRpsStatsLoaded();
+    return handleRpsSubcommand(msg, rpsMatch[1], "가위바위보");
+  }
 
-    const rpsArg = String(rpsMatch[1] || "").trim();
-    if (!rpsArg) {
-      return msg.reply(
-        "⚠️ 사용법: `!가위바위보 가위|바위|보`, `!가위바위보 전적`, `!가위바위보 랭킹 [N]`"
-      );
-    }
-
-    if (rpsArg === "전적") {
-      const record = getOrCreateRpsRecord(rpsStats, msg.author.id);
-      return msg.reply(`📊 <@${msg.author.id}> 기록\n${formatRpsRecord(record)}`);
-    }
-
-    const rankingMatch = rpsArg.match(/^랭킹(?:\s+(\d+))?$/);
-    if (rankingMatch) {
-      const limit = rankingMatch[1] ? parseInt(rankingMatch[1], 10) : 10;
-      if (!Number.isInteger(limit) || limit <= 0) {
-        return msg.reply("⚠️ 사용법: `!가위바위보 랭킹` 또는 `!가위바위보 랭킹 N`");
-      }
-
-      const ranking = getRpsRanking(Math.min(limit, 30));
-      if (ranking.length === 0) {
-        return msg.reply("📊 아직 가위바위보 전적이 없습니다.");
-      }
-
-      const lines = ranking.map((row, index) => (
-        `${index + 1}. <@${row.userId}> - ${formatRpsRecord(row.record)} | 승률 ${formatRankingWinRate(row.record)}`
-      ));
-      return msg.reply(`🏆 가위바위보 랭킹 TOP ${ranking.length}\n${lines.join("\n")}`);
-    }
-
-    const userChoice = normalizeRpsChoice(rpsArg);
-    if (!userChoice) {
-      return msg.reply(
-        "⚠️ 사용법: `!가위바위보 가위|바위|보`, `!가위바위보 전적`, `!가위바위보 랭킹 [N]`"
-      );
-    }
-
-    const botChoice = ["가위", "바위", "보"][Math.floor(Math.random() * 3)];
-    const result = evaluateRps(userChoice, botChoice);
-    const record = await updateRpsStatsForUser(msg.author.id, result);
-    const requesterName = (
-      msg.member?.displayName ||
-      msg.author.globalName ||
-      msg.author.username ||
-      "플레이어"
-    ).trim();
-    return msg.reply(
-      `${requesterName}${rpsChoiceEmoji(userChoice)} vs ${rpsChoiceEmoji(botChoice)} = ${rpsResultEmoji(result)} ${result}\n📈 ${formatRpsRecord(record)}`
-    );
+  const shortRpsMatch = content.match(/^!rps(?:\s+(.+))?$/);
+  if (shortRpsMatch) {
+    return handleRpsSubcommand(msg, shortRpsMatch[1], "rps");
   }
 
   const randomQuestionMatch = content.match(/^!(?:랜덤문제|랜덤\s+문제)(?:\s+(.+))?$/);
