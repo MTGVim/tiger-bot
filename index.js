@@ -629,7 +629,7 @@ function getAvailableCommandsMessage() {
     { command: "!추첨 [N]", description: "온라인 멤버 추첨" },
     { command: "!<가위바위보|rps> <가위|바위|보|r|p|s>", description: "가위바위보 1판 진행" },
     { command: "!<가위바위보|rps> 전적", description: "나의 가위바위보 전적 조회" },
-    { command: "!<가위바위보|rps> 랭킹 [N]", description: "가위바위보 랭킹 조회" },
+    { command: "!<가위바위보|rps> 랭킹|rank [N]", description: "가위바위보 랭킹 조회" },
     { command: "!봇 업데이트", description: "봇 최신 버전 업데이트" },
   ];
 
@@ -647,7 +647,7 @@ function getRpsUsageMessage(prefixCommand) {
   const command = prefixCommand || "가위바위보";
   return (
     `⚠️ 사용법: \`!${command} <가위|바위|보|r|p|s>\`, ` +
-    `\`!${command} 전적\`, \`!${command} 랭킹 [N]\``
+    `\`!${command} 전적\`, \`!${command} 랭킹|rank [N]\``
   );
 }
 
@@ -655,6 +655,7 @@ async function handleRpsSubcommand(msg, rawArg, sourceCommand) {
   await ensureRpsStatsLoaded();
 
   const rpsArg = String(rawArg || "").trim();
+  const normalizedRpsArg = rpsArg.toLowerCase();
   if (!rpsArg) {
     return msg.reply(getRpsUsageMessage(sourceCommand));
   }
@@ -664,7 +665,7 @@ async function handleRpsSubcommand(msg, rawArg, sourceCommand) {
     return msg.reply(`📊 <@${msg.author.id}> 기록\n${formatRpsRecord(record)}`);
   }
 
-  const rankingMatch = rpsArg.match(/^랭킹(?:\s+(\d+))?$/);
+  const rankingMatch = normalizedRpsArg.match(/^(?:랭킹|rank)(?:\s+(\d+))?$/);
   if (rankingMatch) {
     const limit = rankingMatch[1] ? parseInt(rankingMatch[1], 10) : 10;
     if (!Number.isInteger(limit) || limit <= 0) {
